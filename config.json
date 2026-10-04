@@ -1,0 +1,8 @@
+{
+  "repo": "sugarforever/open-github-copilot",
+  "model": { "provider": "deepseek", "modelId": "deepseek-flash" },
+  "thinkingLevel": "high",
+  "language": "Chinese",
+  "pollSeconds": 15,
+  "dataDir": ".data"
+}
