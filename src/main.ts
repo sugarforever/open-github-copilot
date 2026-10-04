@@ -9,22 +9,41 @@ import { NodeExecutionEnv } from "@earendil-works/pi-durable/env/node";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createGitHub, type PullRequest } from "./github.ts";
 import { createReviewer, enqueue } from "./reviewer.ts";
-import { checkout } from "./workspace.ts";
+import { createWorkspace } from "./workspace.ts";
 
 const config = JSON.parse(readFileSync(process.argv[2] ?? "config.json", "utf8"));
 const context = BACKGROUND_CONTEXT;
-const token = process.env.GITHUB_TOKEN ?? execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
+const fail = (message: string): never => {
+	console.error(message);
+	process.exit(1);
+};
+
+// Credentials come from the environment; locally, a logged-in `gh` is enough for GitHub.
+const token = process.env.GITHUB_TOKEN ?? ghToken();
+function ghToken() {
+	try {
+		return execFileSync("gh", ["auth", "token"], { encoding: "utf8" }).trim();
+	} catch {
+		return fail("Set GITHUB_TOKEN (or log in with `gh auth login`).");
+	}
+}
+const models = builtinModels();
+if ((await models.checkAuth(config.model.provider)) === undefined) {
+	fail(`No credentials for ${config.model.provider}: set its API key, e.g. DEEPSEEK_API_KEY for deepseek.`);
+}
 const github = createGitHub(config.repo, token);
+const workspace = createWorkspace(config.dataDir, config.repo, token);
 
 mkdirSync(config.dataDir, { recursive: true });
 const registry = createRegistry();
 registry.install(createReviewer(github, config.language));
 const harness = await Harness.open(
 	await openNodeSqliteStorage(join(config.dataDir, "reviews.sqlite")),
-	{ models: builtinModels(), registry, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? process.cwd() }) },
+	{ models, registry, env: ({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? process.cwd() }) },
 	context,
 );
-process.on("SIGINT", () => harness.close(context).then(() => process.exit(0)));
+// Ctrl-C locally, `docker stop` on a server. Unfinished reviews continue on the next start.
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => harness.close(context).then(() => process.exit(0)));
 
 const log = (pr: number | string, message: string) =>
 	console.log(`${new Date().toTimeString().slice(0, 8)}  ${String(pr).padEnd(6)} ${message}`);
@@ -44,7 +63,7 @@ async function follow(id: ConversationId, pr: number) {
 }
 
 async function review(pr: PullRequest) {
-	const cwd = await checkout(config.dataDir, config.repo, pr);
+	const cwd = await workspace.checkout(pr);
 	const options = { model: config.model, thinkingLevel: config.thinkingLevel };
 	const { conversation, submission } = await enqueue(harness, pr, cwd, options, context);
 	await follow(conversation.id, pr.number);
@@ -63,7 +82,9 @@ harness.resume(); // continue reviews a previous process left unfinished
 const reviewed = new Map<number, string>();
 for (;;) {
 	try {
-		for (const pr of await github.openPullRequests()) {
+		const open = await github.openPullRequests();
+		await workspace.prune(open);
+		for (const pr of open) {
 			if (reviewed.get(pr.number) === pr.sha) continue;
 			await review(pr);
 			reviewed.set(pr.number, pr.sha);

@@ -23,13 +23,33 @@ npm start                     # uses GITHUB_TOKEN, or `gh auth token`
 | `pollSeconds` | how often to check for new commits |
 | `dataDir` | the SQLite store, the clone, and one worktree per reviewed commit |
 
+## Deploy on a server
+
+The reviewer runs unattended in one container. Build the image and start it with your keys:
+
+```bash
+docker build -t open-github-copilot .
+docker run -d --name reviewer --restart unless-stopped \
+  -e GITHUB_TOKEN=... \
+  -e DEEPSEEK_API_KEY=... \
+  -v "$PWD/config.json:/app/config.json:ro" \
+  -v reviewer-data:/app/.data \
+  open-github-copilot
+docker logs -f reviewer
+```
+
+- `GITHUB_TOKEN`: a fine-grained token for the repository with **Contents: read** and **Pull requests: read and write**. Reviews are posted as its owner.
+- `DEEPSEEK_API_KEY`: drives the default model, `deepseek/deepseek-flash` (DeepSeek V4.1 Flash). Another provider needs its own key; the process exits at startup when the key for the configured provider is missing.
+- `reviewer-data` keeps the SQLite store across restarts: after a crash, a reboot, or a new image, unfinished reviews continue and reviewed commits are not reviewed again. Run one container per volume; a store has no cross-process locking.
+- Checkouts of commits that are no longer the head of an open pull request are removed on every poll.
+
 ## How it works
 
 | File | Role |
 |---|---|
 | `src/main.ts` | Opens the Harness on SQLite, resumes unfinished reviews, polls open pull requests |
 | `src/reviewer.ts` | The reviewer extension and `enqueue()`: one conversation per pull request, one submission per commit |
-| `src/workspace.ts` | A git worktree of each commit, used as the conversation's working directory |
+| `src/workspace.ts` | A git worktree of each commit, used as the conversation's working directory; old ones are pruned |
 | `src/github.ts` | The four GitHub REST calls it needs |
 
 - **One conversation per pull request.** Later commits go to the same conversation, so the reviewer knows what it said before.
