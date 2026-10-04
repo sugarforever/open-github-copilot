@@ -21,6 +21,7 @@ npm start                     # uses GITHUB_TOKEN, or `gh auth token`
 | `thinkingLevel` | `off`, `low`, `medium`, `high` |
 | `language` | language of the review |
 | `pollSeconds` | how often to check for new commits |
+| `skipLabels` | pull requests with any of these labels are not reviewed |
 | `dataDir` | the SQLite store, the clone, and one worktree per reviewed commit |
 
 ## How it works

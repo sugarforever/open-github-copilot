@@ -1,6 +1,6 @@
 // The few GitHub REST calls the reviewer needs.
 
-export type PullRequest = { number: number; title: string; body: string; sha: string };
+export type PullRequest = { number: number; title: string; body: string; sha: string; labels: string[] };
 
 export type Review = {
 	commit_id: string;
@@ -31,7 +31,13 @@ export function createGitHub(repo: string, token: string): GitHub {
 			const pulls = await call("/pulls?state=open&per_page=50");
 			return pulls
 				.filter((pull: any) => !pull.draft)
-				.map((pull: any) => ({ number: pull.number, title: pull.title, body: pull.body ?? "", sha: pull.head.sha }));
+				.map((pull: any) => ({
+					number: pull.number,
+					title: pull.title,
+					body: pull.body ?? "",
+					sha: pull.head.sha,
+					labels: pull.labels,
+				}));
 		},
 		diff: (number) => call(`/pulls/${number}`, {}, "application/vnd.github.diff"),
 		async reviewBodies(number) {
