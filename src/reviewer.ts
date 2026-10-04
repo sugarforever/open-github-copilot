@@ -76,7 +76,11 @@ export function createReviewer(github: GitHub, language: string) {
 			summary: Type.String(),
 			comments: Type.Array(Type.Object({ path: Type.String(), line: Type.Integer(), body: Type.String() })),
 		}),
-		execute: async ({ summary, comments }, api, context) => {
+		execute: async (args, api, context) => {
+			// Some models escape newlines twice; GitHub would show a literal "\n".
+			const unescape = (value: string) => value.replaceAll("\\n", "\n");
+			const summary = unescape(args.summary);
+			const comments = args.comments.map((comment) => ({ ...comment, body: unescape(comment.body) }));
 			const { number, sha } = await pullOf(api, context);
 			if ((await github.reviewBodies(number)).some((body) => body.includes(marker(sha)))) {
 				return text("A review for this commit is already posted.");
