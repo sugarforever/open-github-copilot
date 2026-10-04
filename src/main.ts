@@ -65,7 +65,7 @@ for (;;) {
 	try {
 		for (const pr of await github.openPullRequests()) {
 			if (reviewed.get(pr.number) === pr.sha) continue;
-			if (pr.labels.includes(config.skipLabel)) continue; // opt out with a label
+			if (config.skipLabels?.some((label: string) => pr.labels.includes(label))) continue; // opt out with a label
 			await review(pr);
 			reviewed.set(pr.number, pr.sha);
 		}

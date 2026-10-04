@@ -36,7 +36,7 @@ export function createGitHub(repo: string, token: string): GitHub {
 					title: pull.title,
 					body: pull.body ?? "",
 					sha: pull.head.sha,
-					labels: pull.labels,
+					labels: pull.labels.map((label: any) => label.name),
 				}));
 		},
 		diff: (number) => call(`/pulls/${number}`, {}, "application/vnd.github.diff"),
