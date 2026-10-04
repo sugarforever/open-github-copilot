@@ -44,7 +44,7 @@ test("reviews each commit once, in one conversation per pull request", async () 
 		context,
 	);
 	const options = { model: { provider: "faux", modelId: "faux-1" }, thinkingLevel: "off" as const };
-	const pr = { number: 1, title: "Add name", body: "", sha: "aaaaaaa" };
+	const pr = { number: 1, title: "Add name", body: "", sha: "aaaaaaa", labels: [] };
 
 	const first = await enqueue(harness, pr, cwd, options, context);
 	assert.equal((await first.submission.wait(context)).status, "done");
